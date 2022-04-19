@@ -26,7 +26,7 @@ public class Convert {
 
 	//static final String MYSQL_CONN_URL = "jdbc:mysql://163.11.235.163/mlb?"
 	static final String MYSQL_CONN_URL = "jdbc:mysql://163.11.239.96/mlb?"
-    + "verifyServerCertificate=false&useSSL=true&"
+    + "verifyServerCertificate=false&useSSL=false&"
     + "useLegacyDatetimeCode=false&serverTimezone=America/New_York&"
     + "user=jdbc&password=jdbc";  
 
