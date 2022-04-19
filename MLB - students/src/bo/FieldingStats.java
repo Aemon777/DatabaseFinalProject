@@ -26,6 +26,8 @@ public class FieldingStats implements Serializable {
 	@Column
 	Integer putOuts;
 	
+	public FieldingStats() {}
+	
 	public PlayerSeason getId() {
 		return id;
 	}

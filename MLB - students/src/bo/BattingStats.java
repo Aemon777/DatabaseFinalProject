@@ -21,6 +21,8 @@ public class BattingStats implements Serializable{
 	})
 	PlayerSeason id;
 	
+	public BattingStats() {}
+	
 	@Column
 	Integer atBats;
 	@Column

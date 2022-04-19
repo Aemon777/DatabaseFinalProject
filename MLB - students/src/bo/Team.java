@@ -34,6 +34,8 @@ public class Team {
     Integer yearFounded;
     @Column
     Integer yearLast;
+    
+    public Team() {}
 
     public TeamSeason getTeamSeason(int year) {
 		for (TeamSeason ts: seasons) {

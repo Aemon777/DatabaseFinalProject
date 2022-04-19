@@ -44,6 +44,8 @@ public class PitchingStats implements Serializable{
 	@Column
 	Integer saves;
 	
+	public PitchingStats() {}
+	
 	public PlayerSeason getId() {
 		return id;
 	}

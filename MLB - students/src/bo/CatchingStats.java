@@ -21,6 +21,8 @@ public class CatchingStats implements Serializable{
 	})
 	PlayerSeason id;
 	
+	public CatchingStats() {}
+	
 	@Column
 	Integer passedBalls;
 	@Column

@@ -57,6 +57,8 @@ public class Player {
 	Date firstGame;
 	@Column
 	Date lastGame;
+	
+	public Player() {}
 
 	// utility function
 	public PlayerSeason getPlayerSeason(Integer year) {
