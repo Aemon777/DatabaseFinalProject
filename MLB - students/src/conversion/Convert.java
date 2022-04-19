@@ -8,6 +8,7 @@ import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.sql.SQLException;
+import java.sql.CallableStatement;
 
 import bo.BattingStats;
 import bo.CatchingStats;
@@ -22,19 +23,25 @@ import dataaccesslayer.HibernateUtil;
 public class Convert {
 
 	static Connection conn;
-	static final String MYSQL_CONN_URL = "jdbc:mysql://163.11.235.163/mlb?"
+
+	//static final String MYSQL_CONN_URL = "jdbc:mysql://163.11.235.163/mlb?"
+	static final String MYSQL_CONN_URL = "jdbc:mysql://163.11.239.96/mlb?"
     + "verifyServerCertificate=false&useSSL=true&"
     + "useLegacyDatetimeCode=false&serverTimezone=America/New_York&"
-    + "user=user&password=password";  
+    + "user=jdbc&password=jdbc";  
 
 	public static void main(String[] args) {
 		try {
 			long startTime = System.currentTimeMillis();
 			conn = DriverManager.getConnection(MYSQL_CONN_URL);
+			
 			convert();
 			long endTime = System.currentTimeMillis();
 			long elapsed = (endTime - startTime) / (1000*60);
 			System.out.println("Elapsed time in mins: " + elapsed);
+
+			
+			
 		} catch (Exception e) {
 			e.printStackTrace();
 		} finally {
@@ -60,13 +67,22 @@ public class Convert {
 			System.out.println("Positions Retrieved.");
 			addSeasons(players, teams);
 			System.out.println("Seasons Retrieved.");
+			
+			//Debugging persist issues with count
+			//int count = 0;
 			for (Player p : players.values()) {
+				//count ++;
 				HibernateUtil.persistPlayer(p);
+				//System.out.println("" + count);
 			}
 			System.out.println("Persisted Players.");
 			
 			// Persist the team objects.
-
+			for (Team t : teams.values()) {
+				HibernateUtil.persistTeam(t);
+			}
+			System.out.println("Persisted Teams.");
+			
 			HibernateUtil.flushObjects();
 		}
 		catch (Exception e) {
@@ -77,14 +93,95 @@ public class Convert {
 	public static HashMap<String, Team> getTeams() throws SQLException {
 		HashMap<String, Team> teams = new HashMap<String, Team>();
 		
+		int count=0;
+		String query = "{ CALL GetTeams }";
+		ResultSet rs;
+		CallableStatement stmt = conn.prepareCall(query);
+			rs = stmt.executeQuery();
+			while (rs.next()) {
+				count++;
+				// this just gives us some progress feedback
+				String tid = rs.getString("teamID");
+				String name = rs.getString("name");
+				// this check is for data scrubbing
+				// don't want to bring any team over that doesn't have a tid and name
+				if (tid == null	|| tid.isEmpty() 
+								|| name == null 
+								|| name.isEmpty())
+					continue;
+				
+				
+				Team t = new Team();
+
+				t.setName(rs.getString("name"));
+				t.setLeague(rs.getString("lgID"));
+				t.setYearFounded(rs.getInt("yearFounded"));
+				t.setYearLast(rs.getInt("yearLast"));
+				
+				//Output checking
+				/*
+				System.out.println(String.format("%s",
+						rs.getString("teamID") + " "
+						+ rs.getString("name") + " "
+						+ rs.getString("lgID") + " "
+						+ rs.getInt("yearFounded") + " "
+						+ rs.getInt("yearLast")));
+				*/
+				
+				teams.put(tid, t);
+			}
+
 		// Get the teams. 
 		// Only capture the most recent team name and league.
-
+		System.out.println("num teams: " + count);
 		return teams;
 	}
 	
 	private static void addTeamSeasons(HashMap<String, Team> teams) throws SQLException {
-		
+		int count=0;
+		String query = "{ CALL GetTeamSeasons }";
+		ResultSet rs;
+		CallableStatement stmt = conn.prepareCall(query);
+			rs = stmt.executeQuery();
+			while (rs.next()) {
+				count++;
+				// this just gives us some progress feedback
+				
+				String tid = rs.getString("teamID");
+				String year = rs.getString("year");
+				
+				if (tid == null	|| tid.isEmpty() 
+								|| year == null
+								|| year.isEmpty())
+					continue;
+				
+				TeamSeason ts = new TeamSeason(teams.get(tid), rs.getInt("year"));
+
+				ts.setGamesPlayed(rs.getInt("gamesplayed"));
+				ts.setWins(rs.getInt("wins"));
+				ts.setLosses(rs.getInt("losses"));
+				ts.setRank(rs.getInt("rank"));
+				ts.setAttendance(rs.getInt("totalattendance"));
+				
+				
+				if (teams.containsKey(tid)) {
+					teams.get(tid).addSeason(ts);
+				}
+
+				//Output checking
+				/*
+				System.out.println(String.format("%s",
+						rs.getString("teamID") + " "
+						+ rs.getString("year") + " "
+						+ rs.getString("gamesplayed") + " "
+						+ rs.getInt("wins") + " "
+						+ rs.getInt("losses") + " "
+						+ rs.getInt("rank") + " "
+						+ rs.getInt("totalattendance")
+						));
+				*/
+			}
+		System.out.println("num team seasons: " + count);
 		// Get team season data.
 		
 	}
@@ -117,8 +214,8 @@ public class Convert {
 		while (rs.next()) {
 			count++;
 			// this just gives us some progress feedback
-			if (count % 1000 == 0)
-				System.out.println("num players: " + count);
+			//if (count % 1000 == 0)
+			//	System.out.println("num players: " + count);
 
 			String pid = rs.getString("playerID");
 			String firstName = rs.getString("nameFirst");
@@ -173,7 +270,7 @@ public class Convert {
 			}
 			catch (SQLException e){
 				// Ignore conversion error - remains null;
-				System.out.println(pid + ": debut invalid format");
+				//System.out.println(pid + ": debut invalid format");
 			}
 			try {
 				java.util.Date lastGame = rs.getDate("finalGame");
@@ -182,11 +279,12 @@ public class Convert {
 			}
 			catch (SQLException e){
 				// Ignore conversion error - remains null
-				System.out.println(pid + ": finalGame invalid format");
+				//System.out.println(pid + ": finalGame invalid format");
 			}
 
 			players.put(pid, p);
 		}
+		System.out.println("num players: " + count);
 		rs.close();
 		ps.close();
 		return players;
@@ -248,7 +346,8 @@ public class Convert {
 					}
 					
 					// Associate player with a team season.
-					
+					TeamSeason ts = teams.get(rs.getString("teamID")).getTeamSeason(yid);
+					ts.addPlayer(p);
 				}
 			}
 			System.out.println("PlayerSeasons Retrieved.");

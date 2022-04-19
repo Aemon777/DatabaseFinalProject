@@ -51,7 +51,7 @@ public class Player {
 	String birthCity;
 	@Column
 	String birthState;
-  @Column
+  	@Column
 	String birthCountry;
 	@Column
 	Date firstGame;
