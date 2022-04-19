@@ -161,7 +161,7 @@ public class Convert {
 				ts.setWins(rs.getInt("wins"));
 				ts.setLosses(rs.getInt("losses"));
 				ts.setRank(rs.getInt("rank"));
-				ts.setAttendance(rs.getInt("totalattendance"));
+				ts.setTotalAttendance(rs.getInt("totalattendance"));
 				
 				
 				if (teams.containsKey(tid)) {

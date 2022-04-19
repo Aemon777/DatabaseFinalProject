@@ -104,7 +104,7 @@ public class TeamSeason implements Serializable {
     @Column
     Integer rank;
     @Column
-    Integer attendance;
+    Integer totalAttendance;
 
     public void setTeam(Team team) {
         this.id.team = team;
@@ -154,12 +154,12 @@ public class TeamSeason implements Serializable {
         return rank;
     }
 
-    public void setAttendance(Integer attendance) {
-        this.attendance = attendance;
+    public void setTotalAttendance(Integer totalAttendance) {
+        this.totalAttendance = totalAttendance;
     }
 
-    public Integer getAttendance() {
-        return attendance;
+    public Integer getTotalAttendance() {
+        return totalAttendance;
     }
 
 }
