@@ -8,7 +8,6 @@ import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.sql.SQLException;
-import java.sql.CallableStatement;
 
 import bo.BattingStats;
 import bo.CatchingStats;
@@ -23,25 +22,19 @@ import dataaccesslayer.HibernateUtil;
 public class Convert {
 
 	static Connection conn;
-
-	//static final String MYSQL_CONN_URL = "jdbc:mysql://163.11.235.163/mlb?"
 	static final String MYSQL_CONN_URL = "jdbc:mysql://163.11.239.96/mlb?"
-    + "verifyServerCertificate=false&useSSL=false&"
-    + "useLegacyDatetimeCode=false&serverTimezone=America/New_York&"
-    + "user=jdbc&password=jdbc";  
+		    + "verifyServerCertificate=false&useSSL=false&"
+		    + "useLegacyDatetimeCode=false&serverTimezone=America/New_York&"
+		    + "user=jdbc&password=jdbc";  
 
 	public static void main(String[] args) {
 		try {
 			long startTime = System.currentTimeMillis();
 			conn = DriverManager.getConnection(MYSQL_CONN_URL);
-			
 			convert();
 			long endTime = System.currentTimeMillis();
 			long elapsed = (endTime - startTime) / (1000*60);
 			System.out.println("Elapsed time in mins: " + elapsed);
-
-			
-			
 		} catch (Exception e) {
 			e.printStackTrace();
 		} finally {
@@ -51,7 +44,7 @@ public class Convert {
 				e.printStackTrace();
 			}
 		}
-    HibernateUtil.stopConnectionProvider();
+	    HibernateUtil.stopConnectionProvider();
 		HibernateUtil.getSessionFactory().close();
 	}
 
@@ -67,22 +60,14 @@ public class Convert {
 			System.out.println("Positions Retrieved.");
 			addSeasons(players, teams);
 			System.out.println("Seasons Retrieved.");
-			
-			//Debugging persist issues with count
-			//int count = 0;
 			for (Player p : players.values()) {
-				//count ++;
 				HibernateUtil.persistPlayer(p);
-				//System.out.println("" + count);
 			}
 			System.out.println("Persisted Players.");
-			
-			// Persist the team objects.
 			for (Team t : teams.values()) {
 				HibernateUtil.persistTeam(t);
 			}
 			System.out.println("Persisted Teams.");
-			
 			HibernateUtil.flushObjects();
 		}
 		catch (Exception e) {
@@ -92,98 +77,44 @@ public class Convert {
 
 	public static HashMap<String, Team> getTeams() throws SQLException {
 		HashMap<String, Team> teams = new HashMap<String, Team>();
-		
-		int count=0;
-		String query = "{ CALL GetTeams }";
-		ResultSet rs;
-		CallableStatement stmt = conn.prepareCall(query);
-			rs = stmt.executeQuery();
-			while (rs.next()) {
-				count++;
-				// this just gives us some progress feedback
-				String tid = rs.getString("teamID");
-				String name = rs.getString("name");
-				// this check is for data scrubbing
-				// don't want to bring any team over that doesn't have a tid and name
-				if (tid == null	|| tid.isEmpty() 
-								|| name == null 
-								|| name.isEmpty())
-					continue;
-				
-				
-				Team t = new Team();
-
-				t.setName(rs.getString("name"));
-				t.setLeague(rs.getString("lgID"));
-				t.setYearFounded(rs.getInt("yearFounded"));
-				t.setYearLast(rs.getInt("yearLast"));
-				
-				//Output checking
-				/*
-				System.out.println(String.format("%s",
-						rs.getString("teamID") + " "
-						+ rs.getString("name") + " "
-						+ rs.getString("lgID") + " "
-						+ rs.getInt("yearFounded") + " "
-						+ rs.getInt("yearLast")));
-				*/
-				
-				teams.put(tid, t);
-			}
-
-		// Get the teams. 
-		// Only capture the most recent team name and league.
-		System.out.println("num teams: " + count);
+		PreparedStatement ps = conn.prepareStatement("select teamID, yearFounded, yearLast, " + 
+				"(select r.name from Teams r where r.teamID = t.teamID order by r.yearID desc limit 1) as name, " +
+				"(select r.lgID from Teams r where r.teamID = t.teamID order by r.yearID desc limit 1) as lgID " +
+				"from (select teamID, min(yearID) as yearFounded, max(yearID) as yearLast from Teams group by teamID) as t");
+		ResultSet rs = ps.executeQuery();
+		while (rs.next()) {
+			Team t = new Team();
+			String teamId = rs.getString("teamId").trim();
+			String lgId = rs.getString("lgId").trim();
+			t.setLeague(lgId);
+			t.setName(rs.getString("name"));
+			t.setYearFounded(rs.getInt("yearFounded"));
+			t.setYearLast(rs.getInt("yearLast"));
+			teams.put(teamId, t);
+		}
+		rs.close();
+		ps.close();
 		return teams;
 	}
 	
 	private static void addTeamSeasons(HashMap<String, Team> teams) throws SQLException {
-		int count=0;
-		String query = "{ CALL GetTeamSeasons }";
-		ResultSet rs;
-		CallableStatement stmt = conn.prepareCall(query);
-			rs = stmt.executeQuery();
-			while (rs.next()) {
-				count++;
-				// this just gives us some progress feedback
-				
-				String tid = rs.getString("teamID");
-				String year = rs.getString("year");
-				
-				if (tid == null	|| tid.isEmpty() 
-								|| year == null
-								|| year.isEmpty())
-					continue;
-				
-				TeamSeason ts = new TeamSeason(teams.get(tid), rs.getInt("year"));
-
-				ts.setGamesPlayed(rs.getInt("gamesplayed"));
-				ts.setWins(rs.getInt("wins"));
-				ts.setLosses(rs.getInt("losses"));
-				ts.setRank(rs.getInt("rank"));
-				ts.setTotalAttendance(rs.getInt("totalattendance"));
-				
-				
-				if (teams.containsKey(tid)) {
-					teams.get(tid).addSeason(ts);
-				}
-
-				//Output checking
-				/*
-				System.out.println(String.format("%s",
-						rs.getString("teamID") + " "
-						+ rs.getString("year") + " "
-						+ rs.getString("gamesplayed") + " "
-						+ rs.getInt("wins") + " "
-						+ rs.getInt("losses") + " "
-						+ rs.getInt("rank") + " "
-						+ rs.getInt("totalattendance")
-						));
-				*/
+		PreparedStatement ps = conn.prepareStatement("select teamID, yearID, G, L, W, Rank, attendance from Teams");
+		ResultSet rs = ps.executeQuery();
+		while (rs.next()) {
+			Team team = teams.get(rs.getString("teamID"));
+			int yearId = rs.getInt("yearID");
+			if (team != null) {
+				TeamSeason ts = new TeamSeason(team, yearId);
+				ts.setGamesPlayed(rs.getInt("G"));
+				ts.setLosses(rs.getInt("L"));
+				ts.setWins(rs.getInt("W"));
+				ts.setRank(rs.getInt("Rank"));
+				ts.setTotalAttendance(rs.getInt("attendance"));
+				team.getSeasons().add(ts);
 			}
-		System.out.println("num team seasons: " + count);
-		// Get team season data.
-		
+		}
+		rs.close();
+		ps.close();
 	}
 	
 	public static HashMap<String, Player> getPlayers() throws SQLException {
@@ -212,9 +143,10 @@ public class Convert {
 		ResultSet rs = ps.executeQuery();
 		int count=0; // for progress feedback only
 		while (rs.next()) {
+			count++;
 			// this just gives us some progress feedback
-			//if (count % 1000 == 0)
-			//	System.out.println("num players: " + count);
+			if (count % 1000 == 0)
+				System.out.println("num players: " + count);
 
 			String pid = rs.getString("playerID");
 			String firstName = rs.getString("nameFirst");
@@ -227,7 +159,6 @@ public class Convert {
 							|| lastName == null 
 							|| lastName.isEmpty()) 
 				continue;
-			count++;
 			Player p = new Player();
 			p.setName(firstName + " " + lastName);
 			p.setGivenName(rs.getString("nameGiven"));
@@ -270,7 +201,7 @@ public class Convert {
 			}
 			catch (SQLException e){
 				// Ignore conversion error - remains null;
-				//System.out.println(pid + ": debut invalid format");
+				System.out.println(pid + ": debut invalid format");
 			}
 			try {
 				java.util.Date lastGame = rs.getDate("finalGame");
@@ -279,12 +210,11 @@ public class Convert {
 			}
 			catch (SQLException e){
 				// Ignore conversion error - remains null
-				//System.out.println(pid + ": finalGame invalid format");
+				System.out.println(pid + ": finalGame invalid format");
 			}
 
 			players.put(pid, p);
 		}
-		System.out.println("num players: " + count);
 		rs.close();
 		ps.close();
 		return players;
@@ -306,16 +236,13 @@ public class Convert {
 			PreparedStatement ps = conn.prepareStatement("select " +
 					"distinct playerID, pos from Fielding");
 			ResultSet rs = ps.executeQuery();
-			int count = 0;
 			while (rs.next()) {
 				String pid = rs.getString("playerID");
 				String pos = rs.getString("pos");
 				if (players.containsKey(pid)) {
 					players.get(pid).addPosition(pos);
-					count++;
 				}
 			}
-			System.out.println("num positions: " + count);
 			rs.close();
 			ps.close();
 		}
@@ -331,13 +258,11 @@ public class Convert {
 					"from Batting " + 
 					"group by playerID, yearID, teamID, lgID;");
 			ResultSet rs = ps.executeQuery();
-			int count = 0;
 			while (rs.next()) {
 				int yid = rs.getInt("yearID");
 				String pid = rs.getString("playerID");
 				Player p = players.get(pid);
 				if (p != null) {
-					count++;
 					PlayerSeason s = p.getPlayerSeason(yid);
 					// it is possible to see more than one of these per player if he switched teams
 					// set all of these attrs the first time we see this playerseason
@@ -349,10 +274,14 @@ public class Convert {
 					else {
 						s.setGamesPlayed(rs.getInt("gamesPlayed") + s.getGamesPlayed());
 					}
-					
-					// Associate player with a team season.
-					TeamSeason ts = teams.get(rs.getString("teamID")).getTeamSeason(yid);
-					ts.addPlayer(p);
+					String tid = rs.getString("teamID");
+					Team t = teams.get(tid);
+					if (t != null) {
+						TeamSeason ts = t.getSeason(yid);
+						if (ts != null) {
+							ts.getPlayers().add(p);
+						}
+					}
 				}
 			}
 			System.out.println("PlayerSeasons Retrieved.");
@@ -366,8 +295,7 @@ public class Convert {
 			System.out.println("PitchingStats Retrieved.");
 			addCatchingStats(players);
 			System.out.println("CatchingStats Retrieved.");
-			
-			System.out.println("num player seasons: " + count);
+				
 			rs.close();
 			ps.close();
 		} catch (Exception e) {
@@ -423,7 +351,6 @@ public class Convert {
 					"from Batting " + 
 					"group by playerID, yearID");
 			ResultSet rs = ps.executeQuery();
-			int count = 0;
 			while (rs.next()) {
 				String pid = rs.getString("playerID");
 				int yid = rs.getInt("yearID");
@@ -432,7 +359,6 @@ public class Convert {
 					PlayerSeason psi = p.getPlayerSeason(yid);
 					if (psi != null) {
 						BattingStats s = new BattingStats();
-						count++;
 						s.setId(psi);
 						s.setAtBats(rs.getInt("atBats"));
 						s.setHits(rs.getInt("hits"));
@@ -450,7 +376,6 @@ public class Convert {
 					}
 				}	
 			}
-			System.out.println("num batting stats: " + count);
 			rs.close();
 			ps.close();
 		} catch (Exception e) {
@@ -467,7 +392,6 @@ public class Convert {
 					"from Fielding " +
 					"group by playerID, yearID");
 			ResultSet rs = ps.executeQuery();
-			int count = 0;
 			while (rs.next()) {
 				String pid = rs.getString("playerID");
 				int yid = rs.getInt("yearID");
@@ -476,7 +400,6 @@ public class Convert {
 					PlayerSeason psi = p.getPlayerSeason(yid);
 					if (psi != null) {
 						FieldingStats s = new FieldingStats();
-						count++;
 						s.setId(psi);
 						s.setErrors(rs.getInt("errors"));
 						s.setPutOuts(rs.getInt("putOuts"));
@@ -484,7 +407,6 @@ public class Convert {
 					}
 				}
 			}
-			System.out.println("num fielding stats: " + count);
 			rs.close();
 			ps.close();
 		} catch (Exception e) {
@@ -510,7 +432,6 @@ public class Convert {
 					"from Pitching " +
 					"group by playerID, yearID");
 			ResultSet rs = ps.executeQuery();
-			int count = 0;
 			while (rs.next()) {
 				String pid = rs.getString("playerID");
 				int yid = rs.getInt("yearID");
@@ -519,7 +440,6 @@ public class Convert {
 					PlayerSeason psi = p.getPlayerSeason(yid);
 					if (psi != null) {
 						PitchingStats s = new PitchingStats();
-						count++;
 						s.setId(psi);
 						s.setOutsPitched(rs.getInt("outsPitched"));
 						s.setEarnedRunsAllowed(rs.getInt("earnedRunsAllowed"));
@@ -536,7 +456,6 @@ public class Convert {
 					}
 				}
 			}
-			System.out.println("num pitching stats: " + count);
 			rs.close();
 			ps.close();
 		} catch (Exception e) {
@@ -556,7 +475,6 @@ public class Convert {
 					"from Fielding " +
 					"group by playerID, yearID");
 			ResultSet rs = ps.executeQuery();
-			int count = 0;
 			while (rs.next()) {
 				String pid = rs.getString("playerID");
 				int yid = rs.getInt("yearID");
@@ -565,7 +483,6 @@ public class Convert {
 					PlayerSeason psi = p.getPlayerSeason(yid);
 					if (psi != null) {
 						CatchingStats s = new CatchingStats();
-						count++;
 						s.setId(psi);
 						s.setPassedBalls(rs.getInt("passedBalls"));
 						s.setWildPitches(rs.getInt("wildPitches"));
@@ -575,7 +492,6 @@ public class Convert {
 					}
 				}
 			}
-			System.out.println("num catching stats: " + count);
 			rs.close();
 			ps.close();
 		} catch (Exception e) {

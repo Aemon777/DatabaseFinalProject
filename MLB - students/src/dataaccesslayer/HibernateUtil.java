@@ -14,7 +14,7 @@ import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
 
 import bo.Player;
 import bo.Team;
-
+import bo.TeamSeason;
 
 public class HibernateUtil {
 
@@ -25,12 +25,12 @@ public class HibernateUtil {
 			Configuration cfg = new Configuration()
 				.addAnnotatedClass(bo.Player.class)
 				.addAnnotatedClass(bo.PlayerSeason.class)
+				.addAnnotatedClass(bo.Team.class)
+				.addAnnotatedClass(bo.TeamSeason.class)
 				.addAnnotatedClass(bo.BattingStats.class)
 				.addAnnotatedClass(bo.CatchingStats.class)
 				.addAnnotatedClass(bo.FieldingStats.class)
 				.addAnnotatedClass(bo.PitchingStats.class)
-				.addAnnotatedClass(bo.Team.class)
-				.addAnnotatedClass(bo.TeamSeason.class)
 				.configure();
 			StandardServiceRegistryBuilder builder = new StandardServiceRegistryBuilder().
 			applySettings(cfg.getProperties());
@@ -64,7 +64,7 @@ public class HibernateUtil {
 		    query.setParameter("id", id);
 		    if (query.list().size()>0) {
 		    	p = (Player) query.list().get(0);
-		    	Hibernate.initialize(p.getSeasons());
+		    	Hibernate.initialize(p.getTeamSeasons());
 		    }
 			tx.commit();
 		} catch (Exception e) {
@@ -107,7 +107,7 @@ public class HibernateUtil {
 		Transaction tx = session.getTransaction();
 		try {
 			tx.begin();
-			session.save(p);
+			session.saveOrUpdate(p);
 			tx.commit();
 		} catch (Exception e) {
 			tx.rollback();
@@ -118,7 +118,7 @@ public class HibernateUtil {
 		}
 		return true;
 	}
-
+	
 	public static boolean persistTeam(Team t) {
 		Session session = HibernateUtil.getSessionFactory().openSession();
 		Transaction tx = session.getTransaction();
@@ -149,4 +149,7 @@ public class HibernateUtil {
 		return true;
 	}
 
+	// retrieveTeamsByName(String nameQuery, Boolean exactMatch)
+	// retrieveTeamById(Integer id)
+	// retrieveTeamSeasonById(Integer teamId, Integer year)	
 }
